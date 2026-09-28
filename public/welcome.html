@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="auth-page">
+    <main class="welcome-card">
+        <div class="page-kicker">Signed in</div>
+        <h1>Welcome, <span id="userName"></span></h1>
+        <p>Your role: <strong id="userRole"></strong></p>
+        <div class="top-buttons">
+            <button id="openDashboardButton">Go to my dashboard</button>
+            <button id="signOutButton">Sign out</button>
+            <button id="returnToLoginButton">Return to sign in</button>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const name = localStorage.getItem('name');
+            const role = localStorage.getItem('role');
+
+            if (!name) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            document.getElementById('userName').textContent = name;
+            document.getElementById('userRole').textContent = role || 'user';
+        });
+
+        function openDashboard() {
+            const role = localStorage.getItem('role');
+            window.location.href = role === 'admin' ? 'admin.html' : 'user-dashboard.html';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        function goBack() {
+            window.location.href = 'login.html';
+        }
+
+        document.getElementById('openDashboardButton').addEventListener('click', openDashboard);
+        document.getElementById('signOutButton').addEventListener('click', logout);
+        document.getElementById('returnToLoginButton').addEventListener('click', goBack);
+    </script>
+</body>
+
+</html>

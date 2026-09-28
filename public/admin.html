@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-shell">
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-mark">FT</div>
+                <div>
+                    <h1>Football Team Management</h1>
+                    <p>Admin control room</p>
+                </div>
+            </div>
+            <button class="action-button" id="signOutButton">Sign out</button>
+        </header>
+
+        <div class="layout">
+            <nav class="sidebar">
+                <h2>Admin Tables</h2>
+                <div id="adminNav"></div>
+                <h2>User Tables</h2>
+                <div id="userNav"></div>
+            </nav>
+
+            <main class="main-panel">
+                <section class="dashboard-intro">
+                    <div>
+                        <div class="page-kicker">Database dashboard</div>
+                        <h2>Manage club records</h2>
+                        <p>Select a table to view rows, add records, or delete entries from the football management database.</p>
+                    </div>
+                </section>
+                <section class="order-notifications" aria-labelledby="orderNotificationTitle">
+                    <div class="notification-heading">
+                        <div>
+                            <div class="page-kicker">Payment notifications</div>
+                            <h3 id="orderNotificationTitle">Orders awaiting confirmation <span id="pendingOrderCount" class="notification-count">0</span></h3>
+                        </div>
+                        <button class="action-button secondary-button" id="refreshOrderQueueButton">Refresh queue</button>
+                    </div>
+                    <div id="pendingOrders" class="notification-list">Loading paid orders...</div>
+                    <p id="orderQueueMessage" class="payment-message" aria-live="polite"></p>
+                </section>
+                <div id="tables">
+                    <div class="empty-state">Select a table from the sidebar to view data.</div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_TABLES = [
+            'users', 'Venue', 'Team', 'PositionDetails', 'Athlete', 'Coach', 'Referee', 'Game',
+            'Statistics', 'Awards', 'Sponsor', 'Injury', 'ParticipatesIn', 'LocatedIn', 'HasSponsor',
+            'GivenBy', 'WinsAward', 'Referees'
+        ];
+
+        const USER_TABLES = [
+            'OrderItems', 'Orders', 'Tickets', 'Merchandise', 'News', 'UserFan', 'footballmanagment_game'
+        ];
+
+        const adminNav = document.getElementById('adminNav');
+        const userNav = document.getElementById('userNav');
+        const tablesDiv = document.getElementById('tables');
+
+        const tableLabels = {
+            users: 'User accounts',
+            Venue: 'Venues',
+            Team: 'Teams',
+            PositionDetails: 'Player positions',
+            Athlete: 'Athletes',
+            Coach: 'Coaches',
+            Referee: 'Referees',
+            Game: 'Matches',
+            Statistics: 'Statistics',
+            Awards: 'Awards',
+            Sponsor: 'Sponsors',
+            Injury: 'Injuries',
+            ParticipatesIn: 'Participation records',
+            LocatedIn: 'Location records',
+            HasSponsor: 'Sponsor partnerships',
+            GivenBy: 'Award presenters',
+            WinsAward: 'Award winners',
+            Referees: 'Match officials',
+            OrderItems: 'Order items',
+            Orders: 'Customer orders',
+            Tickets: 'Match tickets',
+            Merchandise: 'Club merchandise',
+            News: 'Club news',
+            UserFan: 'Fan profiles',
+            footballmanagment_game: 'Match schedule'
+        };
+
+        function getTableLabel(table) {
+            return tableLabels[table] || table.replace(/([a-z])([A-Z])/g, '$1 $2');
+        }
+
+        function createNavButton(table, type) {
+            const btn = document.createElement('button');
+            btn.textContent = getTableLabel(table);
+            btn.onclick = () => loadTable(table, type, btn);
+            return btn;
+        }
+
+        ADMIN_TABLES.forEach(t => adminNav.appendChild(createNavButton(t, 'admin')));
+        USER_TABLES.forEach(t => userNav.appendChild(createNavButton(t, 'user')));
+
+        async function loadPendingOrders() {
+            const container = document.getElementById('pendingOrders');
+            const count = document.getElementById('pendingOrderCount');
+            const message = document.getElementById('orderQueueMessage');
+            message.textContent = '';
+            message.classList.remove('status-error');
+            try {
+                const res = await fetch('/api/admin/pending-orders');
+                const orders = await res.json();
+                if (!res.ok) throw new Error(orders.message || 'Could not load paid orders.');
+                count.textContent = orders.length;
+                if (!orders.length) {
+                    container.innerHTML = '<p class="notification-empty">No paid orders are waiting for confirmation.</p>';
+                    return;
+                }
+                container.innerHTML = orders.map(order => `
+                    <article class="order-notification">
+                        <div>
+                            <strong>Order #${order.order_id}</strong>
+                            <span>${order.item_count} item(s) · ৳${order.total_amount} · Paid ${new Date(order.paid_at).toLocaleString()}</span>
+                        </div>
+                        <button class="confirm-order" data-order-id="${order.order_id}">Confirm order</button>
+                    </article>`).join('');
+                container.querySelectorAll('.confirm-order').forEach(button => {
+                        button.onclick = async () => {
+                            button.disabled = true;
+                            const res = await fetch(`/api/admin/orders/${button.dataset.orderId}/confirm`, { method: 'POST' });
+                            const data = await res.json();
+                        if (!res.ok) {
+                            message.textContent = data.message || 'Could not confirm this order.';
+                            message.classList.add('status-error');
+                            button.disabled = false;
+                            return;
+                        }
+                        loadPendingOrders();
+                    };
+                });
+            } catch (err) {
+                container.innerHTML = `<p class="status-error">${err.message}</p>`;
+            }
+        }
+
+        loadPendingOrders();
+
+        async function loadTable(table, type, activeButton) {
+            document.querySelectorAll('.sidebar button').forEach(button => button.classList.remove('active'));
+            if (activeButton) activeButton.classList.add('active');
+            tablesDiv.innerHTML = '<div class="empty-state">Loading table data...</div>';
+            try {
+                const url = type === 'admin' ? '/api/admin/all-data' : '/api/user/all-data';
+                const res = await fetch(url);
+                const data = await res.json();
+                const rows = data[table] || [];
+                tablesDiv.innerHTML = '';
+
+                const tableContainer = document.createElement('div');
+                tableContainer.className = 'table-container';
+                tableContainer.innerHTML = `<h2>${getTableLabel(table)}</h2>`;
+
+                if (rows.error) {
+                    tableContainer.innerHTML += `<p class="status-error">Error: ${rows.error}</p>`;
+                } else if (rows.length > 0) {
+                    const htmlTable = document.createElement('table');
+                    const headers = Object.keys(rows[0]);
+                    htmlTable.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}<th>Delete</th></tr>` +
+                        rows.map(row => `<tr>${headers.map(h => `<td>${row[h] ?? ''}</td>`).join('')}<td><button data-table="${table}" data-key="${headers[0]}" data-value="${row[headers[0]]}">Remove</button></td></tr>`).join('');
+                    tableContainer.appendChild(htmlTable);
+
+                    const insertForm = document.createElement('form');
+                    headers.forEach(h => {
+                        const input = document.createElement('input');
+                        input.name = h;
+                        input.placeholder = h;
+                        insertForm.appendChild(input);
+                    });
+
+                    const submitBtn = document.createElement('button');
+                    submitBtn.type = 'submit';
+                    submitBtn.textContent = 'Save new record';
+                    insertForm.appendChild(submitBtn);
+
+                    insertForm.onsubmit = async function (e) {
+                        e.preventDefault();
+                        const row = {};
+                        Array.from(insertForm.elements).forEach(el => {
+                            if (el.name && el.value) row[el.name] = el.value;
+                        });
+                        await fetch(`/api/${type}/insert`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ table, row })
+                        });
+                        loadTable(table, type, activeButton);
+                    };
+
+                    tableContainer.appendChild(insertForm);
+
+                    tableContainer.querySelectorAll('button[data-table]').forEach(btn => {
+                        btn.onclick = async function () {
+                            const table = btn.getAttribute('data-table');
+                            const key = btn.getAttribute('data-key');
+                            const value = btn.getAttribute('data-value');
+                            await fetch(`/api/${type}/delete`, {
+                                method: 'DELETE',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ table, key, value })
+                            });
+                            loadTable(table, type, activeButton);
+                        };
+                    });
+                } else {
+                    tableContainer.innerHTML += '<p>No data found.</p>';
+                }
+
+                tablesDiv.appendChild(tableContainer);
+            } catch (err) {
+                tablesDiv.innerHTML = `<div class="empty-state status-error">Error: ${err.message}</div>`;
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        document.getElementById('signOutButton').addEventListener('click', logout);
+        document.getElementById('refreshOrderQueueButton').addEventListener('click', loadPendingOrders);
+    </script>
+</body>
+
+</html>

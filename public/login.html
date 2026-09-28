@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Football Team Management</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="auth-page">
+    <div class="auth-shell">
+        <section class="auth-hero">
+            <div class="eyebrow">Club operations</div>
+            <h1>Football Team Management System</h1>
+            <p>Manage players, fixtures, sponsors, awards, tickets, and match data from one focused dashboard.</p>
+        </section>
+
+        <section class="wrapper">
+            <div class="title-text">
+                <div class="title login">Welcome back</div>
+                <div class="title signup">Create account</div>
+            </div>
+            <div class="form-container">
+                <div class="slide-controls">
+                    <input type="radio" name="slide" id="login" checked>
+                    <input type="radio" name="slide" id="signup">
+                    <label for="login" class="slide login">Login</label>
+                    <label for="signup" class="slide signup">Signup</label>
+                    <div class="slider-tab"></div>
+                </div>
+                <div class="form-inner">
+                    <form class="login" id="loginForm">
+                        <div class="field">
+                            <input type="email" name="email" placeholder="Email Address" required>
+                        </div>
+                        <div class="field">
+                            <input type="password" name="password" placeholder="Password" required>
+                        </div>
+                        <div class="field btn">
+                            <div class="btn-layer"></div>
+                            <input type="submit" value="Sign in to dashboard">
+                        </div>
+                        <div class="signup-link">New to the club office? <a href="">Signup now</a></div>
+                    </form>
+
+                    <form class="signup" id="signupForm">
+                        <div class="field">
+                            <input type="text" name="name" placeholder="Full Name" required>
+                        </div>
+                        <div class="field">
+                            <input type="email" name="email" placeholder="Email Address" required>
+                        </div>
+                        <div class="field">
+                            <input type="password" name="password" placeholder="Password" required>
+                        </div>
+                        <div class="field">
+                            <input type="password" name="confirm" placeholder="Confirm password" required>
+                        </div>
+                        <div class="field btn">
+                            <div class="btn-layer"></div>
+                            <input type="submit" value="Create my account">
+                        </div>
+                    </form>
+                </div>
+                <p id="authMessage" class="auth-message" aria-live="polite"></p>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        const loginTitle = document.querySelector('.title-text .login');
+        const loginTab = document.querySelector('label.login');
+        const signupTab = document.querySelector('label.signup');
+        const signupLink = document.querySelector('.signup-link a');
+        const authMessage = document.getElementById('authMessage');
+
+        function showLoginForm() {
+            loginForm.style.marginLeft = '0%';
+            loginTitle.style.marginLeft = '0%';
+            authMessage.textContent = '';
+        }
+
+        function showSignupForm() {
+            loginForm.style.marginLeft = '-50%';
+            loginTitle.style.marginLeft = '-50%';
+            authMessage.textContent = '';
+        }
+
+        function showAuthMessage(message, isError = false) {
+            authMessage.textContent = message;
+            authMessage.classList.toggle('status-error', isError);
+        }
+
+        loginTab.addEventListener('click', showLoginForm);
+        signupTab.addEventListener('click', showSignupForm);
+        signupLink.addEventListener('click', event => {
+            event.preventDefault();
+            signupTab.click();
+        });
+
+        loginForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            const email = loginForm.email.value;
+            const password = loginForm.password.value;
+            showAuthMessage('Signing you in...');
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    showAuthMessage(result.message || 'Unable to sign in.', true);
+                    return;
+                }
+
+                localStorage.setItem('role', result.role);
+                localStorage.setItem('name', result.name);
+                localStorage.setItem('email', email);
+                window.location.href = result.role === 'admin' ? 'admin.html' : 'user-dashboard.html';
+            } catch (error) {
+                showAuthMessage('The server could not be reached. Please try again.', true);
+            }
+        });
+
+        signupForm.addEventListener('submit', async event => {
+            event.preventDefault();
+            const name = signupForm.name.value;
+            const email = signupForm.email.value;
+            const password = signupForm.password.value;
+            const confirmation = signupForm.confirm.value;
+
+            if (password !== confirmation) {
+                showAuthMessage('The passwords do not match.', true);
+                return;
+            }
+
+            showAuthMessage('Creating your account...');
+            try {
+                const response = await fetch('/api/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, password })
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    showAuthMessage(result.message || 'Unable to create your account.', true);
+                    return;
+                }
+
+                signupForm.reset();
+                showAuthMessage('Account created. You can sign in now.');
+                loginTab.click();
+                authMessage.textContent = 'Account created. You can sign in now.';
+            } catch (error) {
+                showAuthMessage('The server could not be reached. Please try again.', true);
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+    <div class="app-shell">
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-mark">FT</div>
+                <div>
+                    <h1>Football Team Management</h1>
+                    <p>Fan and user dashboard</p>
+                </div>
+            </div>
+            <div class="user-chip" id="welcomeUser"></div>
+        </header>
+
+        <div class="layout">
+            <nav class="sidebar">
+                <h2>Tables</h2>
+                <div id="navButtons"></div>
+            </nav>
+
+            <main class="main-panel">
+                <section class="dashboard-intro">
+                    <div>
+                        <div class="page-kicker">Club data</div>
+                        <h2>Browse matchday records</h2>
+                        <p>Open orders, tickets, merchandise, news, fan profiles, and game details from the sidebar or cards.</p>
+                    </div>
+                </section>
+
+                <section class="payment-demo" aria-labelledby="paymentDemoTitle">
+                    <div>
+                        <div class="page-kicker">Demo checkout</div>
+                        <h3 id="paymentDemoTitle">Complete an order payment</h3>
+                        <p>Enter an existing order ID to simulate a successful payment. The order will then appear in the admin approval queue.</p>
+                    </div>
+                    <form id="demoPaymentForm" class="demo-payment-form">
+                        <input id="demoOrderId" type="number" min="1" placeholder="Order ID" required>
+                        <button type="submit">Pay this order (demo)</button>
+                    </form>
+                    <p id="paymentMessage" class="payment-message" aria-live="polite"></p>
+                </section>
+
+                <section class="athlete-news" aria-labelledby="athleteNewsTitle">
+                    <div class="news-heading">
+                        <div>
+                            <div class="page-kicker">Live football feed</div>
+                            <h3 id="athleteNewsTitle">Athlete news &amp; transfer updates</h3>
+                        </div>
+                        <button id="refreshNews" class="secondary-button" type="button">Get latest updates</button>
+                    </div>
+                    <div id="athleteNewsList" class="athlete-news-list" aria-live="polite">
+                        <p class="notification-empty">Loading the latest athlete news...</p>
+                    </div>
+                </section>
+
+                <div class="cards" id="cardsContainer"></div>
+                <div id="tablesContainer">
+                    <div class="empty-state">Select a table from the sidebar or cards to view data.</div>
+                </div>
+                <div class="top-buttons">
+                    <button id="signOutButton">Sign out</button>
+                    <button id="returnToWelcomeButton">Return to welcome page</button>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const tables = [
+            'OrderItems', 'Orders', 'Tickets', 'Merchandise', 'News', 'UserFan', 'footballmanagment_game'
+        ];
+
+        const navButtons = document.getElementById('navButtons');
+        const cardsContainer = document.getElementById('cardsContainer');
+        const tablesContainer = document.getElementById('tablesContainer');
+        const welcomeUser = document.getElementById('welcomeUser');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const name = localStorage.getItem('name');
+            if (!name) window.location.href = 'login.html';
+            welcomeUser.textContent = `Welcome, ${name}`;
+        });
+
+        document.getElementById('demoPaymentForm').addEventListener('submit', async event => {
+            event.preventDefault();
+            const orderId = document.getElementById('demoOrderId').value;
+            const message = document.getElementById('paymentMessage');
+            message.textContent = 'Processing demo payment...';
+            message.className = 'payment-message';
+
+            try {
+                const res = await fetch(`/api/orders/${orderId}/demo-pay`, { method: 'POST' });
+                const data = await res.json();
+                message.textContent = data.message;
+                message.classList.toggle('status-error', !res.ok);
+                if (res.ok) event.target.reset();
+            } catch (err) {
+                message.textContent = 'Could not process the demo payment.';
+                message.classList.add('status-error');
+            }
+        });
+
+        async function loadAthleteNews() {
+            const list = document.getElementById('athleteNewsList');
+            list.innerHTML = '<p class="notification-empty">Loading the latest athlete news...</p>';
+            try {
+                const res = await fetch('/api/athlete-news');
+                const articles = await res.json();
+                if (!res.ok) throw new Error(articles.message || 'Unable to load athlete news.');
+                list.innerHTML = '';
+                if (!articles.length) {
+                    list.innerHTML = '<p class="notification-empty">No athlete news is available right now.</p>';
+                    return;
+                }
+                articles.forEach(article => {
+                    const card = document.createElement('article');
+                    card.className = 'athlete-news-card';
+                    if (article.image) {
+                        const image = document.createElement('img');
+                        image.src = article.image;
+                        image.alt = '';
+                        image.loading = 'lazy';
+                        card.appendChild(image);
+                    }
+                    const content = document.createElement('div');
+                    const title = document.createElement('h4');
+                    title.textContent = article.title;
+                    const summary = document.createElement('p');
+                    summary.textContent = article.summary;
+                    const link = document.createElement('a');
+                    link.href = article.url;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = 'Read article →';
+                    content.append(title, summary, link);
+                    card.appendChild(content);
+                    list.appendChild(card);
+                });
+            } catch (err) {
+                list.innerHTML = `<p class="status-error">${err.message}</p>`;
+            }
+        }
+
+        document.getElementById('refreshNews').addEventListener('click', loadAthleteNews);
+        loadAthleteNews();
+
+        const tableLabels = {
+            OrderItems: 'Order items',
+            Orders: 'My orders',
+            Tickets: 'Match tickets',
+            Merchandise: 'Club merchandise',
+            News: 'Club news',
+            UserFan: 'Fan profiles',
+            footballmanagment_game: 'Match schedule'
+        };
+
+        function getTableLabel(table) {
+            return tableLabels[table] || table.replace(/([a-z])([A-Z])/g, '$1 $2');
+        }
+
+        tables.forEach(table => {
+            const btn = document.createElement('button');
+            btn.textContent = getTableLabel(table);
+            btn.onclick = () => loadTable(table, btn);
+            navButtons.appendChild(btn);
+
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `<h3>${getTableLabel(table)}</h3><p>View available records</p>`;
+            card.onclick = () => loadTable(table, btn);
+            cardsContainer.appendChild(card);
+        });
+
+        async function loadTable(tableName, activeButton) {
+            document.querySelectorAll('.sidebar button').forEach(button => button.classList.remove('active'));
+            if (activeButton) activeButton.classList.add('active');
+            tablesContainer.innerHTML = '<div class="empty-state">Loading table data...</div>';
+            try {
+                const res = await fetch('/api/user/all-data');
+                const data = await res.json();
+                const tableData = data[tableName];
+
+                tablesContainer.innerHTML = '';
+                if (!tableData || tableData.error) {
+                    tablesContainer.innerHTML = `<div class="empty-state status-error">Error: ${tableData?.error || 'No data'}</div>`;
+                    return;
+                }
+
+                if (tableData.length === 0) {
+                    tablesContainer.innerHTML = '<div class="empty-state">No records found.</div>';
+                    return;
+                }
+
+                const tblDiv = document.createElement('div');
+                tblDiv.className = 'table-container';
+                const title = document.createElement('h2');
+                title.textContent = getTableLabel(tableName);
+                tblDiv.appendChild(title);
+
+                const tbl = document.createElement('table');
+                const headerRow = document.createElement('tr');
+                for (const col in tableData[0]) {
+                    const th = document.createElement('th');
+                    th.textContent = col;
+                    headerRow.appendChild(th);
+                }
+                tbl.appendChild(headerRow);
+
+                tableData.forEach(row => {
+                    const tr = document.createElement('tr');
+                    for (const col in row) {
+                        const td = document.createElement('td');
+                        td.textContent = row[col] ?? '';
+                        tr.appendChild(td);
+                    }
+                    tbl.appendChild(tr);
+                });
+
+                tblDiv.appendChild(tbl);
+                tablesContainer.appendChild(tblDiv);
+
+            } catch (err) {
+                console.error(err);
+                tablesContainer.innerHTML = '<div class="empty-state status-error">Failed to load table data.</div>';
+            }
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        function goBack() {
+            window.location.href = 'welcome.html';
+        }
+
+        document.getElementById('signOutButton').addEventListener('click', logout);
+        document.getElementById('returnToWelcomeButton').addEventListener('click', goBack);
+    </script>
+</body>
+
+</html>
